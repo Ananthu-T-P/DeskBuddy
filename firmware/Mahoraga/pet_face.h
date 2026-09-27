@@ -1,6 +1,6 @@
 #pragma once
 // pet_face.h — mandatory OLED animation state machine (AGENTS.md §4).
-// This module owns ALL pixel drawing. main.cpp only ever calls
+// This module owns ALL pixel drawing. Mahoraga.ino only ever calls
 // setState() / update() — never draws pixels directly.
 
 #include <Arduino.h>

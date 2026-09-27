@@ -1,4 +1,6 @@
-// main.cpp — top-level orchestration ONLY (docs/FIRMWARE.md).
+// Mahoraga.ino — main sketch file. Top-level orchestration ONLY
+// (docs/FIRMWARE.md). Open the firmware/Mahoraga FOLDER in Arduino IDE and
+// it opens all the module tabs (.h/.cpp) together.
 //
 // State machine: IDLE -> LISTENING -> THINKING -> TALKING -> IDLE, with
 // ERROR reachable from any state. All I2S, HTTP and pixel work lives in the
@@ -25,21 +27,27 @@
 // Set back to 0 for normal operation.
 #define FACE_SELFTEST 0
 
-namespace {
+// Forward declarations — the Arduino builder auto-generates these for .ino
+// files, but declaring them explicitly keeps every builder version happy.
+void setState(PetState s, const char* why);
+void goError(bool persistent, const char* why);
+bool buttonPressedEdge();
+bool configLooksValid();
+const char* netResultName(NetResult r);
 
 #if FACE_SELFTEST
-const PetState SELFTEST_ORDER[5] = {
+static const PetState SELFTEST_ORDER[5] = {
   PetState::IDLE, PetState::LISTENING, PetState::THINKING,
   PetState::TALKING, PetState::ERROR,
 };
 #endif
 
-constexpr uint32_t ERROR_FACE_MS = 3000;  // transient errors: X_X face, then IDLE
-constexpr uint32_t DEBOUNCE_MS   = 50;
+static const uint32_t ERROR_FACE_MS = 3000;  // transient errors: X_X, then IDLE
+static const uint32_t DEBOUNCE_MS   = 50;
 
-PetState state          = PetState::IDLE;
-uint32_t errorShownMs   = 0;
-bool     errorPersistent = false;  // persistent = hold ERROR until WiFi is back
+static PetState state           = PetState::IDLE;
+static uint32_t errorShownMs    = 0;
+static bool     errorPersistent = false;  // persistent = hold until WiFi returns
 
 void setState(PetState s, const char* why) {
   state = s;
@@ -95,8 +103,6 @@ const char* netResultName(NetResult r) {
   return "?";
 }
 
-}  // namespace
-
 // --------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -114,8 +120,8 @@ void setup() {
 #endif
 
   if (!configLooksValid()) {
-    Serial.println("[boot] CONFIG ERROR: include/config.h still has placeholder values.");
-    Serial.println("       Edit include/config.h with real WiFi + SERVER_URL, then reflash.");
+    Serial.println("[boot] CONFIG ERROR: config.h still has placeholder values.");
+    Serial.println("       Edit config.h (next to Mahoraga.ino) with real WiFi + SERVER_URL, then reflash.");
     // Persistent ERROR: WiFi can never connect with placeholder credentials,
     // so the face keeps showing X_X until reflashed with a real config.
     goError(true, "invalid config.h");

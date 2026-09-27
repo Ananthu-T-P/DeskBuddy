@@ -7,6 +7,7 @@
 
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <esp_heap_caps.h>
 
 NetClient netClient;
@@ -48,7 +49,21 @@ NetResult NetClient::sendAudio(const uint8_t* pcm, size_t len, uint32_t timeoutM
   // ---- POST it, bounded by the configured timeout ----------------------
   HTTPClient http;
   http.setTimeout(timeoutMs);  // TCP connect + request timeout, ms
-  if (!http.begin(SERVER_URL)) {
+
+  // Plain HTTP for a LAN server (http://192.168.x.x:8000/talk).
+  // HTTPS for a public tunnel URL (e.g. if the server is later exposed via
+  // a Cloudflare/ngrok tunnel). setInsecure() skips certificate checks —
+  // acceptable for a hobbyist tunnel URL.
+  WiFiClient plainClient;
+  WiFiClientSecure secureClient;
+  bool began;
+  if (String(SERVER_URL).startsWith("https://")) {
+    secureClient.setInsecure();
+    began = http.begin(secureClient, SERVER_URL);
+  } else {
+    began = http.begin(plainClient, SERVER_URL);
+  }
+  if (!began) {
     free(body);
     return NetResult::CONNECT_FAILED;
   }

@@ -1,27 +1,33 @@
 # docs/FIRMWARE.md — ESP32-S3 Firmware Spec
 
-Target: PlatformIO project, board `esp32-s3-devkitc-1` (or the closest match
-for the exact WROOM-1 dev board in use), Arduino framework.
+Target: **Arduino IDE sketch** at `firmware/Mahoraga/Mahoraga.ino` (the
+folder name and `.ino` name must match — Arduino IDE requirement). Board:
+"ESP32S3 Dev Module" (esp32 core by Espressif via Boards Manager). Tools
+menu: set **"USB CDC On Boot" = Enabled** or Serial Monitor shows nothing.
 
 ## Libraries
 
+Install via Arduino IDE Library Manager: **Adafruit SSD1306** and **Adafruit
+GFX Library** (their Audio/BusIO dependencies install automatically).
+Everything else ships with the esp32 Arduino core: `WiFi`, `HTTPClient`,
+`WiFiClientSecure` (used when `SERVER_URL` is https://, e.g. behind a
+tunnel), `Wire`, and the legacy `driver/i2s.h`.
+
 - `Adafruit_GFX` + `Adafruit_SSD1306` — OLED face rendering.
-- `ArduinoJson` — building/parsing Gemini-adjacent JSON if the firmware
-  itself ever needs to parse a JSON reply (it mostly won't — the server
-  returns raw WAV bytes — but keep it available for any status JSON).
 - `HTTPClient` (bundled with the ESP32 Arduino core) — POST to the relay
-  server.
-- I2S: use the ESP32 Arduino core's built-in `driver/i2s.h` (or
-  `ESP_I2S.h` on newer core versions) directly rather than a heavyweight
-  audio framework — this project only needs raw PCM in and raw PCM/WAV out,
-  not decoding/mixing.
+  server. Supports both plain-HTTP LAN servers and HTTPS tunnel URLs.
+- I2S: use the ESP32 Arduino core's built-in `driver/i2s.h` directly rather
+  than a heavyweight audio framework — this project only needs raw PCM in
+  and raw PCM/WAV out, not decoding/mixing. (Legacy I2S API: deprecation
+  warnings from newer cores are expected and harmless.)
 
 ## File responsibilities
 
-- **`main.cpp`** — `setup()`/`loop()` orchestration only. Owns the top-level
-  state machine (`IDLE → LISTENING → THINKING → TALKING → IDLE`, with `ERROR`
-  reachable from any state). Calls into the other modules; contains no I2S,
-  HTTP, or pixel-drawing code directly.
+- **`Mahoraga.ino`** — `setup()`/`loop()` orchestration only. Owns the
+  top-level state machine (`IDLE → LISTENING → THINKING → TALKING → IDLE`,
+  with `ERROR` reachable from any state). Calls into the other modules;
+  contains no I2S, HTTP, or pixel-drawing code directly. (Also holds the
+  `FACE_SELFTEST` switch for `docs/TESTING.md` §1.)
 - **`pins.h`** — every GPIO number and the OLED I2C address as named
   `#define`s, sourced from `HARDWARE.md`. Nothing else in the codebase
   should contain a raw pin number.
@@ -46,7 +52,7 @@ for the exact WROOM-1 dev board in use), Arduino framework.
   described in `AGENTS.md` §4. This is the one module that must work
   completely standalone before anything else is wired up.
 
-## State machine (in `main.cpp`)
+## State machine (in `Mahoraga.ino`)
 
 ```
 enum class PetState { IDLE, LISTENING, THINKING, TALKING, ERROR };
@@ -69,7 +75,7 @@ enum class PetState { IDLE, LISTENING, THINKING, TALKING, ERROR };
   then → `IDLE`.
 
 Every state transition calls `petFace.setState(newState)` once — animation
-detail lives entirely inside `pet_face.cpp`, not in `main.cpp`.
+detail lives entirely inside `pet_face.cpp`, not in `Mahoraga.ino`.
 
 ## Recording format
 
@@ -79,7 +85,7 @@ capture and the STT call on the server.
 
 ## Config
 
-`include/config.h` (tracked with placeholder values — fill real values on
+`Mahoraga/config.h` (tracked with placeholder values — fill real values on
 the machine that flashes/runs it; never push that edit back):
 
 ```cpp
@@ -93,6 +99,6 @@ the machine that flashes/runs it; never push that edit back):
 #define MAX_RECORDING_MS 6000
 ```
 
-`main.cpp` must check at boot that these aren't left as the placeholder
+`Mahoraga.ino` must check at boot that these aren't left as the placeholder
 strings and print a clear `Serial` error (and show `ERROR` on the OLED) if
 they are, per `AGENTS.md` §7.

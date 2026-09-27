@@ -17,7 +17,7 @@ talking, error) — this is not optional polish, it is a core requirement (see
 
 The system has two independent codebases in one repo:
 
-- `firmware/` — C++ (Arduino/PlatformIO) code flashed onto the ESP32-S3.
+- `firmware/Mahoraga/` — C++ Arduino IDE sketch flashed onto the ESP32-S3.
 - `server/` — Python relay server (FastAPI) that does Speech-to-Text, calls
   Gemini, does Text-to-Speech, and returns audio to the ESP32.
 
@@ -72,12 +72,10 @@ desktop-pet/
 │   ├── SERVER.md              relay server architecture, endpoints
 │   ├── API.md                 Gemini + Google Cloud STT/TTS integration spec
 │   └── TESTING.md             acceptance checklist, per-module test plan
-├── firmware/                  PlatformIO project — flashed to ESP32-S3
-│   ├── platformio.ini
-│   ├── include/
-│   │   └── config.h           WiFi creds, server URL, pin defs (placeholders)
-│   └── src/
-│       ├── main.cpp
+├── firmware/                  Arduino IDE sketch — flashed to ESP32-S3
+│   └── Mahoraga/              open this folder in Arduino IDE
+│       ├── Mahoraga.ino       setup()/loop() + top-level state machine
+│       ├── config.h           WiFi creds + SERVER_URL (tracked placeholders)
 │       ├── pins.h
 │       ├── wifi_manager.cpp/.h
 │       ├── audio_capture.cpp/.h
@@ -95,7 +93,7 @@ desktop-pet/
 Build in this order: `HARDWARE.md` pins → `pet_face.cpp/.h` (OLED animation,
 testable standalone with no network) → `wifi_manager` → `audio_capture` /
 `audio_playback` → `server/` (all three files) → `net_client.cpp/.h` wiring
-firmware to server → `main.cpp` tying the whole state machine together. This
+firmware to server → `Mahoraga.ino` tying the whole state machine together. This
 order lets each piece be sanity-checked before it depends on anything else.
 
 ## 4. OLED animation requirement (must-have, do not skip)
@@ -122,7 +120,7 @@ Implementation requirements:
   `loop()`. This is the main reason the firmware must be non-blocking (§7).
 - Put all animation frame logic in `pet_face.cpp` behind a small API like
   `petFace.setState(PetState::LISTENING); petFace.update();` called every
-  loop iteration — `main.cpp` should only ever call `setState()`, never draw
+  loop iteration — `Mahoraga.ino` should only ever call `setState()`, never draw
   pixels directly.
 - Confirm this module works completely standalone (flash firmware with only
   the OLED wired up, cycle through all five states on a timer) before wiring
@@ -169,7 +167,7 @@ back to IDLE
 Apply these everywhere, not just where convenient:
 
 - **Non-blocking main loop.** No `delay()` longer than a few ms anywhere in
-  `main.cpp` or `pet_face.cpp`. Long operations (recording, HTTP, playback)
+  `Mahoraga.ino` or `pet_face.cpp`. Long operations (recording, HTTP, playback)
   must not prevent `petFace.update()` from being called regularly, or the
   face will freeze and look broken.
 - **WiFi reconnect.** `wifi_manager` must detect disconnects and retry with
@@ -186,7 +184,7 @@ Apply these everywhere, not just where convenient:
   returns the `NO_SPEECH` sentinel and the server short-circuits with a
   small generated "didn't catch that" Malayalam clip (via `tts.py`) rather
   than sending empty text to TTS.
-- **Config validation on boot.** `main.cpp` should sanity-check that
+- **Config validation on boot.** `Mahoraga.ino` should sanity-check that
   `WIFI_SSID`, `WIFI_PASSWORD`, and `SERVER_URL` in `config.h` are non-empty
   placeholders before proceeding, and print a clear Serial error if not.
   `app.py` should do the same for `GEMINI_API_KEY` at startup, refusing to
@@ -197,7 +195,7 @@ Apply these everywhere, not just where convenient:
 
 ## 8. Secrets
 
-Owner's rule for this repo: `firmware/include/config.h` and `server/.env`
+Owner's rule for this repo: `firmware/Mahoraga/config.h` and `server/.env`
 are BOTH tracked, shipping with placeholder values only ("paste your ...
 here"). Real WiFi credentials / the real Gemini key are entered only on the
 machine that runs that piece and are NEVER committed or pushed from there.

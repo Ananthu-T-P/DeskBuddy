@@ -3,7 +3,7 @@
 // collect the WAV reply (multipart/form-data, field "audio"; docs/SERVER.md).
 //
 // Blocking but bounded: every call has an explicit timeout (HTTP_TIMEOUT_MS,
-// default 15000 — AGENTS.md §7). main.cpp draws the THINKING face immediately
+// default 15000 — AGENTS.md §7). Mahoraga.ino draws the THINKING face immediately
 // before and after the call (docs/FIRMWARE.md).
 
 #include <Arduino.h>

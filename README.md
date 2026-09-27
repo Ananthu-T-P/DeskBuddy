@@ -10,7 +10,8 @@ on this repo. Humans, keep reading.
 
 ## What's in this repo
 
-- `firmware/` — ESP32-S3 code (PlatformIO). Flash this to the board.
+- `firmware/Mahoraga/` — ESP32-S3 code (Arduino IDE sketch: open
+  `Mahoraga.ino`). Flash this to the board.
 - `server/` — Python relay server. Runs on a laptop or Raspberry Pi on the
   same WiFi network as the ESP32. **Requires Python 3.10+** — this repo may
   have been written on a machine without Python installed, but it must be
@@ -51,15 +52,18 @@ another device on the same WiFi — should return `{"status":"ok"}`.
 Find the local IP: `ipconfig` (Windows) or `ifconfig`/`ip addr` (Mac/Linux),
 look under the WiFi adapter.
 
-### 4. Configure and flash the firmware
+### 4. Configure and flash the firmware (Arduino IDE)
 
-```bash
-cd firmware
-# edit include/config.h (already in the repo): WiFi SSID/password,
-# and SERVER_URL = http://<server-ip>:8000/talk
-```
-
-Open in PlatformIO, build, and upload to the ESP32-S3.
+1. Arduino IDE → Boards Manager → install **"esp32 by Espressif"**;
+   Library Manager → install **"Adafruit SSD1306"** and **"Adafruit GFX
+   Library"**.
+2. Open the sketch: `firmware/Mahoraga/Mahoraga.ino` (the module files open
+   as tabs).
+3. Edit the `config.h` tab: WiFi SSID/password, and
+   `SERVER_URL = http://<server-ip>:8000/talk`.
+4. Tools → Board = **"ESP32S3 Dev Module"**, and set **"USB CDC On Boot" =
+   Enabled** so Serial Monitor (115200 baud) shows the pet's logs.
+5. Upload.
 
 ### 5. Use it
 
@@ -71,7 +75,7 @@ Malayalam); the pet answers out loud through the speaker.
 
 ## Secrets
 
-`firmware/include/config.h` and `server/.env` live in the repo WITH
+`firmware/Mahoraga/config.h` and `server/.env` live in the repo WITH
 PLACEHOLDER VALUES on purpose, so anyone cloning it sees the complete
 structure. Fill in the real WiFi details / Gemini key only on the machine
 that actually runs each part — and never commit or push those edits back
