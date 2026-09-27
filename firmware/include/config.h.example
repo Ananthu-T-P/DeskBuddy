@@ -1,0 +1,13 @@
+#pragma once
+// Copy this file to config.h and fill in real values.
+// config.h is gitignored — never commit real WiFi credentials or URLs
+// that reveal your network layout.
+
+#define WIFI_SSID "your-wifi-ssid"
+#define WIFI_PASSWORD "your-wifi-password"
+
+// Local IP of the machine running server/app.py, port 8000, /talk route.
+#define SERVER_URL "http://192.168.1.50:8000/talk"
+
+#define HTTP_TIMEOUT_MS 15000
+#define MAX_RECORDING_MS 6000

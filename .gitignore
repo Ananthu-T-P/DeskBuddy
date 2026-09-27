@@ -1,0 +1,14 @@
+# Firmware
+firmware/include/config.h
+firmware/.pio/
+
+# Server
+server/.env
+server/gcloud-key.json
+server/venv/
+server/__pycache__/
+server/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
