@@ -115,7 +115,7 @@ void setup() {
 
   if (!configLooksValid()) {
     Serial.println("[boot] CONFIG ERROR: include/config.h still has placeholder values.");
-    Serial.println("       Copy config.h.example -> config.h, fill in real WiFi + SERVER_URL, reflash.");
+    Serial.println("       Edit include/config.h with real WiFi + SERVER_URL, then reflash.");
     // Persistent ERROR: WiFi can never connect with placeholder credentials,
     // so the face keeps showing X_X until reflashed with a real config.
     goError(true, "invalid config.h");

@@ -1,22 +1,9 @@
-# Firmware
-# NOTE: firmware/include/config.h is TRACKED on purpose (placeholder values
-# only) so it is visible on GitHub. Fill in real WiFi/server values only on
-# the machine that will run it — and never commit/push those edits.
+# Build / cache junk (not secrets — keeps GitHub pushes small and clean)
 firmware/.pio/
-
-# Server
-# NOTE: server/.env and gcloud-key.json stay ignored deliberately — these
-# are the two files that receive the REAL API keys on the target machine.
-# If the repo is cloned there to run the server, this prevents a careless
-# `git add . && git push` from leaking live keys into GitHub history
-# (leaked keys in history are scraped by bots within minutes, even if
-# you delete the file after).
-server/.env
-server/gcloud-key.json
 server/venv/
 server/__pycache__/
 server/*.pyc
 
-# OS
+# OS junk
 .DS_Store
 Thumbs.db

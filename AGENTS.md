@@ -32,11 +32,16 @@ the ESP32.
    listening, thinking, talking, error/offline). A static image or a single
    "happy face" bitmap is not acceptable — see §4 for the exact state list
    and animation behavior required.
-2. **The only LLM used is Google Gemini** (via the `google-generativeai` /
-   Gemini API). Do not substitute OpenAI, Claude, or any other model.
+2. **The only AI service used is the Google Gemini API** — hearing (audio
+   understanding of the recorded clip), thinking (the LLM reply), and
+   speaking (Gemini TTS) all go through Gemini, via the `google-genai`
+   Python SDK and a single free API key. Do not substitute OpenAI, Claude,
+   or any other model/provider, and do not reintroduce Google Cloud
+   Speech-to-Text / Text-to-Speech (the all-Gemini design deliberately
+   removed them — no Google Cloud project or service account exists).
 3. **Spoken language is Malayalam** (`ml-IN`) for both understanding the
-   user (via STT or Gemini audio input) and speaking back (via TTS). System
-   prompts to Gemini must explicitly instruct it to reply only in Malayalam.
+   user (Gemini audio input) and speaking back (Gemini TTS). Prompts to
+   Gemini must explicitly instruct it to reply only in Malayalam.
 4. **Build the server even though this development machine has no Python
    installed.** Do not skip, stub, or "simplify" `server/` because Python
    isn't available here to test it locally. Write it completely and
@@ -81,16 +86,15 @@ desktop-pet/
 │       └── pet_face.cpp/.h    OLED animation state machine (mandatory, §4)
 └── server/                    Python relay server — runs on laptop/Pi
     ├── requirements.txt
-    ├── .env.example
+    ├── .env                   tracked placeholder — real key only on run machine
     ├── app.py
-    ├── stt.py
-    ├── llm.py
-    └── tts.py
+    ├── llm.py                 Gemini audio understanding + Malayalam reply
+    └── tts.py                 Gemini TTS → 16 kHz WAV
 ```
 
 Build in this order: `HARDWARE.md` pins → `pet_face.cpp/.h` (OLED animation,
 testable standalone with no network) → `wifi_manager` → `audio_capture` /
-`audio_playback` → `server/` (all four files) → `net_client.cpp/.h` wiring
+`audio_playback` → `server/` (all three files) → `net_client.cpp/.h` wiring
 firmware to server → `main.cpp` tying the whole state machine together. This
 order lets each piece be sanity-checked before it depends on anything else.
 
@@ -144,13 +148,11 @@ ESP32 records ~3–5s from INMP441 over I2S  (pet_face → LISTENING)
 POST multipart audio → http://<server-ip>:8000/talk   (pet_face → THINKING)
         │
         ▼  (server/app.py)
-Google Speech-to-Text (ml-IN) → Malayalam transcript
+Gemini audio input → understands the Malayalam speech,
+system prompt forces a Malayalam pet-personality reply
         │
         ▼
-Gemini API, system prompt forces Malayalam pet-personality reply
-        │
-        ▼
-Google Text-to-Speech (ml-IN) → reply audio (WAV, 16kHz)
+Gemini TTS (ml-IN) → reply audio (resampled server-side to 16 kHz WAV)
         │
         ▼
 HTTP response body = WAV bytes
@@ -177,30 +179,31 @@ Apply these everywhere, not just where convenient:
   explicit timeout (e.g. 15s) — an unreachable server must not hang the
   device. On timeout or non-200 response, go to `ERROR` state and return to
   `IDLE`, don't retry in a tight loop.
-- **Server-side try/except around every external call** (`stt.py`,
-  `llm.py`, `tts.py`) — a Google API hiccup or a Gemini rate-limit response
-  must return a clean HTTP error to the ESP32, never a raw Python traceback
-  or a hung request.
-- **Empty/failed transcription handling.** If STT returns no text (silence,
-  noise), the server should short-circuit and return a small "didn't catch
-  that" Malayalam audio clip (or a defined empty response the firmware
-  recognizes) rather than sending empty text to Gemini.
+- **Server-side try/except around every external call** (`llm.py`,
+  `tts.py`) — a Gemini hiccup or rate-limit response must return a clean
+  HTTP error to the ESP32, never a raw Python traceback or a hung request.
+- **No-speech handling.** If the recorded clip is silence/noise, Gemini
+  returns the `NO_SPEECH` sentinel and the server short-circuits with a
+  small generated "didn't catch that" Malayalam clip (via `tts.py`) rather
+  than sending empty text to TTS.
 - **Config validation on boot.** `main.cpp` should sanity-check that
   `WIFI_SSID`, `WIFI_PASSWORD`, and `SERVER_URL` in `config.h` are non-empty
   placeholders before proceeding, and print a clear Serial error if not.
-  `app.py` should do the same for `GEMINI_API_KEY` and
-  `GOOGLE_APPLICATION_CREDENTIALS` at startup, refusing to start with a
-  clear message rather than failing on the first request.
+  `app.py` should do the same for `GEMINI_API_KEY` at startup, refusing to
+  start with a clear message rather than failing on the first request.
 - **Recording length bounds.** Cap recording at a fixed max duration
   (e.g. 6s) regardless of button behavior, so a stuck button can't fill
   memory or hang the device.
 
 ## 8. Secrets
 
-Never hardcode real API keys or WiFi passwords into files that get
-committed. `firmware/include/config.h` and `server/.env` both must ship as
-`*.example` templates with placeholder values, and both must be listed in
-`.gitignore`. Document this clearly in `README.md`.
+Owner's rule for this repo: `firmware/include/config.h` and `server/.env`
+are BOTH tracked, shipping with placeholder values only ("paste your ...
+here"). Real WiFi credentials / the real Gemini key are entered only on the
+machine that runs that piece and are NEVER committed or pushed from there.
+The old `*.example` templates were removed as redundant — the tracked files
+themselves are now the templates, and `.gitignore` covers only build/OS
+junk. Document this clearly in `README.md`.
 
 ## 9. Definition of done
 
@@ -212,9 +215,10 @@ committed. `firmware/include/config.h` and `server/.env` both must ship as
       `LISTENING` state.
 - [ ] Server exposes `/health` and `/talk`, both implemented exactly as in
       `docs/SERVER.md`, with try/except around every external call.
-- [ ] `/talk` round-trip works end-to-end: audio in → Malayalam transcript →
-      Gemini reply (Malayalam only) → Malayalam TTS audio → played on the
-      speaker, with `THINKING` and `TALKING` states shown at the right times.
+- [ ] `/talk` round-trip works end-to-end: audio in → Gemini understands
+      the Malayalam speech → Gemini Malayalam reply → Gemini TTS audio
+      (16 kHz WAV) → played on the speaker, with `THINKING` and `TALKING`
+      states shown at the right times.
 - [ ] Every failure mode in `docs/TESTING.md` §"Failure-mode tests" has been
       exercised and results in `ERROR` state + automatic recovery, not a
       hang or crash.

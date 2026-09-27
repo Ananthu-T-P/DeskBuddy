@@ -79,7 +79,8 @@ capture and the STT call on the server.
 
 ## Config
 
-`include/config.h` (gitignored; ship `config.h.example`):
+`include/config.h` (tracked with placeholder values — fill real values on
+the machine that flashes/runs it; never push that edit back):
 
 ```cpp
 #pragma once

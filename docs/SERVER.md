@@ -2,9 +2,8 @@
 
 Python 3.10+, FastAPI + uvicorn. Runs on a laptop/Raspberry Pi on the same
 WiFi network as the ESP32 — not on this development machine, which may not
-have Python installed. Write and review this code carefully since it can't
-be run here; keep functions small and each one's contract obvious so
-mistakes are easy to catch by reading.
+have Python installed. A single free Gemini API key powers the whole
+pipeline (docs/API.md); there is no Google Cloud service account.
 
 ## Endpoints
 
@@ -17,9 +16,12 @@ connectivity from a phone/browser before wiring up the ESP32.
 
 - Accepts `multipart/form-data` with a single field `audio`: raw PCM bytes,
   16kHz / 16-bit / mono (see `docs/FIRMWARE.md` recording format).
-- Pipeline: `stt.py` → `llm.py` → `tts.py` (see `docs/API.md` for each).
+- Pipeline: `llm.py` → `tts.py` (see `docs/API.md` for each):
+  1. `llm.understand_and_reply(pcm)` — Gemini hears the audio and writes a
+     short Malayalam reply (or the `NO_SPEECH` sentinel).
+  2. `tts.synthesize_speech(reply)` — Gemini TTS renders it as 16 kHz WAV.
 - Returns: `audio/wav` bytes of the Malayalam reply on success.
-- On any internal failure (STT empty, Gemini error, TTS error), return an
+- On any internal failure (Gemini error, TTS error, network), return an
   HTTP error status (e.g. 502) with a small JSON body describing the
   failure — never let an unhandled exception produce a bare 500 with a
   stack trace as the body; the firmware only needs to know
@@ -30,32 +32,29 @@ connectivity from a phone/browser before wiring up the ESP32.
 ## File responsibilities
 
 - **`app.py`** — FastAPI app, the two routes above, startup validation of
-  required env vars (`GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`),
-  and top-level try/except around the `/talk` pipeline that converts any
-  exception into a clean error response.
-- **`stt.py`** — wraps Google Cloud Speech-to-Text, `language_code="ml-IN"`,
-  `encoding=LINEAR16`, `sample_rate_hertz=16000`. Returns `""` (empty
-  string) if there's no result, rather than raising — `app.py` decides what
-  to do with an empty transcript.
-- **`llm.py`** — wraps the Gemini API. System prompt must explicitly pin
-  the reply language to Malayalam and keep replies short (1–2 sentences,
-  since they get spoken aloud through a small speaker). See `docs/API.md`
-  for the exact prompt and model name to use.
-- **`tts.py`** — wraps Google Cloud Text-to-Speech, `language_code="ml-IN"`,
-  `LINEAR16` output at 16kHz so the firmware's playback code doesn't need
-  to handle multiple sample rates.
+  the required env var (`GEMINI_API_KEY`), and top-level try/except around
+  the `/talk` pipeline that converts any exception into a clean error
+  response.
+- **`llm.py`** — Gemini audio understanding + Malayalam reply. Wraps the PCM
+  in a WAV header, sends it with the pet-personality system prompt (docs/API.md),
+  and returns reply text. Returns the `NO_SPEECH` sentinel verbatim when the
+  clip has no clear speech — `app.py` decides what to do with that.
+- **`tts.py`** — Gemini Text-to-Speech. Malayalam text in, 16 kHz
+  LINEAR16 WAV out (resamples Gemini's 24 kHz PCM and adds the WAV header)
+  so the firmware's playback code only ever deals with one format.
 
 ## Environment / secrets
 
-`server/.env.example` (real `.env` is gitignored):
+`server/.env` is tracked WITH A PLACEHOLDER (owner's decision), so anyone
+cloning the repo sees the complete config surface:
 
 ```
-GEMINI_API_KEY=your_gemini_key_here
-GOOGLE_APPLICATION_CREDENTIALS=gcloud-key.json
+GEMINI_API_KEY=paste_your_gemini_api_key_here
 ```
 
-`gcloud-key.json` (the downloaded service-account key) is also gitignored
-and must never be committed.
+Fill in the real key ONLY on the machine that runs the server, and never
+commit/push that edit back (AGENTS.md §8). That one variable is the entire
+credential surface of the project.
 
 ## Running it
 
@@ -64,7 +63,7 @@ cd server
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # fill in real values
+# edit .env (tracked in the repo) — paste your real Gemini key
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
@@ -74,11 +73,12 @@ firewall allows inbound connections on port 8000, and that both devices are
 on the same WiFi network (see `README.md` troubleshooting pointer to
 `docs/TESTING.md`).
 
-## Empty-transcript handling
+## No-speech handling
 
-If `stt.py` returns `""`, `app.py` should skip calling Gemini/TTS entirely
-and either (a) return a small pre-recorded/generated "I didn't catch that"
-Malayalam audio clip, or (b) return a defined lightweight error the
-firmware treats as "go to ERROR briefly, then IDLE" rather than trying to
-play zero bytes of audio. Pick one approach and document which one you
-implemented directly in a comment at the top of `app.py`.
+If `llm.py` returns the `NO_SPEECH` sentinel (silence/noise in the clip),
+`app.py` skips the reply path and synthesizes a short canned Malayalam
+"I didn't catch that" line via `tts.py` — approach (a) from the original
+spec: a small *generated* Malayalam clip, so the pet gives friendly audio
+feedback instead of an error buzz. If that fallback TTS call also fails,
+`/talk` returns the standard 502 JSON error. This decision is also
+documented in a comment at the top of `app.py`.

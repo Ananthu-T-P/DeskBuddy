@@ -1,8 +1,8 @@
 #pragma once
-// Local copy of config.h.example with PLACEHOLDER values so the project
-// builds out of the box. This file is gitignored — put real values here,
-// never commit them. main.cpp validates these at boot and shows the ERROR
-// face with a clear Serial message if placeholders are still present.
+// PLACEHOLDER values — edit these on the machine that flashes/runs the
+// firmware, and never push the edited file back (AGENTS.md §8). main.cpp
+// validates them at boot and shows the ERROR face + a clear Serial message
+// if placeholders are still present.
 
 #define WIFI_SSID "your-wifi-ssid"
 #define WIFI_PASSWORD "your-wifi-password"

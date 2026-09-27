@@ -1,24 +1,29 @@
 """app.py — FastAPI relay server for the ESP32 desktop pet (docs/SERVER.md).
 
+All-Gemini design (AGENTS.md §2.2): ONE free Gemini API key does all three
+jobs — hearing (audio understanding), thinking (LLM reply), and speaking
+(Gemini TTS). No Google Cloud project, service account, or billing file.
+
 Routes:
   GET  /health -> {"status": "ok"}
   POST /talk   -> multipart/form-data, single field "audio" (raw PCM,
                   16 kHz / 16-bit / mono) IN, audio/wav bytes OUT.
-                  Pipeline: stt.py -> llm.py -> tts.py (docs/API.md).
+                  Pipeline: llm.py (audio -> Malayalam reply text)
+                            -> tts.py (reply -> 16 kHz WAV).
 
-Empty-transcript policy (docs/SERVER.md, "Empty-transcript handling"):
-  approach (a) is implemented — when STT returns "" (silence/noise), Gemini
-  is skipped entirely and a short *generated* Malayalam "I didn't catch
-  that" clip is returned via tts.py. If that TTS call also fails, /talk
-  falls through to the generic 502 handler.
+No-speech policy (docs/SERVER.md, empty-transcript handling): approach (a) —
+when Gemini hears no intelligible speech it returns the NO_SPEECH sentinel;
+we synthesize a short generated Malayalam "I didn't catch that" clip via
+tts.py instead of treating it as an error. If that TTS call also fails,
+/talk falls through to the generic 502 handler.
 
 Failure contract (AGENTS.md §7 / docs/SERVER.md):
   any pipeline failure -> HTTP 502 with a small JSON body describing it —
   never a bare 500 with a stack trace; the firmware only needs
   "200 + audio => play it" vs "anything else => ERROR face".
 
-Runs on a machine with Python 3.10+ — not the machine this code was
-written on. Start with: uvicorn app:app --host 0.0.0.0 --port 8000
+Runs on a machine with Python 3.10+. Start with:
+  uvicorn app:app --host 0.0.0.0 --port 8000
 """
 import logging
 import os
@@ -39,8 +44,8 @@ log = logging.getLogger("desktop-pet")
 # "Sorry, I didn't understand."
 DIDNT_CATCH_THAT = "ക്ഷമിക്കണം, എനിക്ക് മനസ്സിലായില്ല."
 
-REQUIRED_ENV_VARS = ("GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS")
-_PLACEHOLDER_VALUES = {"", "your_gemini_key_here"}
+REQUIRED_ENV_VARS = ("GEMINI_API_KEY",)
+_PLACEHOLDER_VALUES = {"", "paste_your_gemini_api_key_here"}
 
 
 def _validate_startup_config() -> None:
@@ -55,29 +60,19 @@ def _validate_startup_config() -> None:
         raise SystemExit(
             "CONFIG ERROR: missing/placeholder env var(s): "
             + ", ".join(missing)
-            + "\nCopy .env.example to .env and fill in real values "
-              "(see docs/API.md for how to get the keys)."
-        )
-    creds = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-    if not os.path.isfile(creds):
-        raise SystemExit(
-            f"CONFIG ERROR: GOOGLE_APPLICATION_CREDENTIALS points to "
-            f"'{creds}', but that file does not exist (relative to the "
-            f"directory you start uvicorn from). Download the service-account "
-            f"JSON key per docs/API.md and place it next to app.py."
+            + "\nEdit server/.env and paste your free Gemini API key in "
+              "place of the placeholder (https://aistudio.google.com — see "
+              "docs/API.md)."
         )
 
 
 _validate_startup_config()
 
-# Imported only after config validation: llm.py reads GEMINI_API_KEY at
-# import time, and the Google STT/TTS clients should only be needed in a
-# correctly-configured environment.
+# Imported only after config validation: both read GEMINI_API_KEY at import.
 import llm  # noqa: E402
-import stt  # noqa: E402
 import tts  # noqa: E402
 
-app = FastAPI(title="Desktop Pet Relay", version="1.0.0")
+app = FastAPI(title="Desktop Pet Relay", version="1.1.0")
 
 
 @app.get("/health")
@@ -94,17 +89,14 @@ async def talk(audio: UploadFile = File(...)) -> Response:
             raise HTTPException(status_code=400, detail="empty audio field")
         log.info("/talk: received %d bytes of PCM", len(pcm))
 
-        transcript = stt.transcribe_audio(pcm)
-        if not transcript.strip():
-            log.info("/talk: empty transcript -> Malayalam fallback clip")
+        reply_text = llm.understand_and_reply(pcm)
+        if reply_text == llm.NO_SPEECH:
+            log.info("/talk: no clear speech -> Malayalam fallback clip")
             reply_audio = tts.synthesize_speech(DIDNT_CATCH_THAT)
-            return Response(content=reply_audio, media_type="audio/wav")
+        else:
+            log.info("/talk: gemini reply: %s", reply_text)
+            reply_audio = tts.synthesize_speech(reply_text)
 
-        log.info("/talk: transcript: %s", transcript)
-        reply_text = llm.get_ai_reply(transcript)
-        log.info("/talk: gemini reply: %s", reply_text)
-
-        reply_audio = tts.synthesize_speech(reply_text)
         log.info("/talk: replying with %d bytes of WAV", len(reply_audio))
         return Response(content=reply_audio, media_type="audio/wav")
 

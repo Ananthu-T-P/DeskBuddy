@@ -34,8 +34,8 @@ you speak near the mic.
 ## 4. Server, standalone (on the target machine with Python)
 
 - [ ] `uvicorn app:app --host 0.0.0.0 --port 8000` starts without error,
-      and fails loudly with a clear message if `GEMINI_API_KEY` or
-      `GOOGLE_APPLICATION_CREDENTIALS` is missing (per `AGENTS.md` §7).
+      and fails loudly with a clear message if `GEMINI_API_KEY` is missing
+      or left as the placeholder (per `AGENTS.md` §7).
 - [ ] `GET /health` from a browser/`curl` on another device on the same
       WiFi returns `{"status":"ok"}`.
 - [ ] `POST /talk` with a short pre-recorded Malayalam WAV clip (`curl -F
