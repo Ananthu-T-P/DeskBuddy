@@ -1,111 +1,91 @@
-# Desktop Pet — ESP32-S3 + Gemini (Malayalam)
+# DeskBuddy
 
-An ESP32-S3 desktop pet with an animated OLED face. Press the button, talk
-to it, and it replies out loud in Malayalam using the Google Gemini API for
-everything — hearing, thinking, and speaking. One free API key total, no
-Google Cloud account needed.
+ESP32-S3 desk buddy that talks Malayalam. Press the button, talk to it, it
+talks back through a small speaker, and the little OLED face animates the
+whole time (idle / listening / thinking / talking / error) so you can tell
+what it's doing.
 
-See `AGENTS.md` for the full build spec if you're an AI coding agent working
-on this repo. Humans, keep reading.
+Everything runs on the free Gemini API - it hears the audio, thinks of a
+reply, and speaks it. One API key is all you need. The "server" is just a
+small Python program on any laptop on the same wifi; it shuttles audio
+between the ESP32 and Gemini.
 
-## What's in this repo
+## what's in here
 
-- `firmware/Mahoraga/` — ESP32-S3 code (Arduino IDE sketch: open
-  `Mahoraga.ino`). Flash this to the board.
-- `server/` — Python relay server. Runs on a laptop or Raspberry Pi on the
-  same WiFi network as the ESP32. **Requires Python 3.10+** — this repo may
-  have been written on a machine without Python installed, but it must be
-  run on one that has it.
-- `HARDWARE.md` — exact wiring/pinout for this build.
-- `docs/` — detailed specs for firmware, server, the Gemini/Google Cloud
-  integration, and the test checklist.
+- `firmware/Mahoraga/` - the arduino sketch (open `Mahoraga.ino`)
+- `server/` - the python relay (`app.py` is the entry point)
+- `HARDWARE.md` - wiring/pinout, build it exactly like this
+- `docs/` - more detail if you want it (`TESTING.md` is the hardware-day
+  checklist)
 
-## Quick start
+## quick start
 
-### 1. Wire it up
+### 1. wire it
 
-Follow `HARDWARE.md` exactly — pin numbers there are confirmed against the
-actual wiring diagram for this build, including the OLED on GPIO41 (SDA) /
-GPIO42 (SCL).
+Follow `HARDWARE.md`. Note the OLED goes on GPIO41/42, not the usual
+21/22 - check the table.
 
-### 2. Get your API key
+### 2. gemini key
 
-- **Gemini API key** — from Google AI Studio (aistudio.google.com → "Get
-  API key"). This single key covers hearing, thinking and speaking
-  (Malayalam throughout). No Google Cloud project or service-account file
-  needed. Details: `docs/API.md`.
+Get a free key at aistudio.google.com. That's the only key this project
+needs.
 
-### 3. Set up the server (on a machine with Python)
+### 3. server (any machine with python 3.10+)
 
-```bash
+```
 cd server
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate       :: mac/linux: source venv/bin/activate
 pip install -r requirements.txt
-# open .env (already in the repo) and paste your Gemini API key
-uvicorn app:app --host 0.0.0.0 --port 8000
+notepad .env                :: paste the gemini key
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Confirm it's up: open `http://<this-machine's-local-ip>:8000/health` from
-another device on the same WiFi — should return `{"status":"ok"}`.
+First run, windows firewall asks to allow python - allow it on private
+networks. Then from your phone on the same wifi open
+`http://<laptop-ip>:8000/health` and you should get `{"status":"ok"}`.
+(`ipconfig` on the laptop shows its ip)
 
-Find the local IP: `ipconfig` (Windows) or `ifconfig`/`ip addr` (Mac/Linux),
-look under the WiFi adapter.
+### 4. firmware (arduino ide)
 
-### 4. Configure and flash the firmware (Arduino IDE)
+- boards manager: install "esp32 by Espressif"; library manager: install
+  "Adafruit SSD1306" and "Adafruit GFX Library"
+- open `firmware/Mahoraga/Mahoraga.ino` (the other files open as tabs)
+- fill in the `config.h` tab: wifi name/password and
+  `SERVER_URL = http://<laptop-ip>:8000/talk`
+- board = "ESP32S3 Dev Module", and set "USB CDC On Boot" = Enabled
+  (otherwise serial monitor shows nothing)
+- upload
 
-1. Arduino IDE → Boards Manager → install **"esp32 by Espressif"**;
-   Library Manager → install **"Adafruit SSD1306"** and **"Adafruit GFX
-   Library"**.
-2. Open the sketch: `firmware/Mahoraga/Mahoraga.ino` (the module files open
-   as tabs).
-3. Edit the `config.h` tab: WiFi SSID/password, and
-   `SERVER_URL = http://<server-ip>:8000/talk`.
-4. Tools → Board = **"ESP32S3 Dev Module"**, and set **"USB CDC On Boot" =
-   Enabled** so Serial Monitor (115200 baud) shows the pet's logs.
-5. Upload.
+### 5. use it
 
-### 5. Use it
+Press the BOOT button and talk - malayalam works best. The face goes
+listening -> thinking -> talking and back to idle. Serial monitor (115200)
+logs what the board is doing, and the server window prints what it heard
+and what it replied.
 
-Press the BOOT button to talk. Watch the OLED — it should animate through
-idle → listening → thinking → talking states as you interact (see
-`docs/FIRMWARE.md` for exactly what each state looks like). Speak in
-Malayalam (or any language — Gemini will still be instructed to reply in
-Malayalam); the pet answers out loud through the speaker.
+## secrets
 
-## Secrets
+`firmware/Mahoraga/config.h` and `server/.env` are in the repo with
+PLACEHOLDER values on purpose, so the whole thing is visible. Put the real
+wifi/gemini values in only on the machine that runs it, and don't push
+those edits back.
 
-`firmware/Mahoraga/config.h` and `server/.env` live in the repo WITH
-PLACEHOLDER VALUES on purpose, so anyone cloning it sees the complete
-structure. Fill in the real WiFi details / Gemini key only on the machine
-that actually runs each part — and never commit or push those edits back
-(AGENTS.md §8).
+## cost
 
-## Costs
+Hardware is a one-time ~Rs.1000-1600 (list in `HARDWARE.md`). Gemini's free
+tier covers casual use easily. If google asks you to "enable billing" to
+unlock the free tier, it still charges Rs.0 inside free limits (set a zero
+budget alert if you want to be sure).
 
-Hardware is a one-time cost (~₹1000–1600 for the parts listed in
-`HARDWARE.md`). Software is free at hobby-usage volume: the Gemini API free
-tier covers hearing + brain + voice for dozens of daily interactions, and
-running the server on your own laptop/Pi costs nothing. (New Google
-accounts are sometimes asked to "enable billing" on the project to unlock
-the free tier — nothing is charged within free-tier limits; set a budget
-alert for certainty. Check `docs/API.md` for details.)
+## if it breaks
 
-## Troubleshooting
-
-- **ESP32 shows the ERROR face right after boot and never recovers** →
-  check `SERVER_URL` IP in `config.h`, that the server is running, and that
-  the answer to `curl http://<server-ip>:8000/health` from a phone on the
-  same WiFi is `{"status":"ok"}`.
-- **ESP32 can't reach the server but /health works on the server laptop
-  itself** → Windows Firewall is blocking it: allow "Python" on Private
-  networks (the prompt appears at the first uvicorn run — click Allow), and
-  make sure the WiFi router's "AP isolation"/"client isolation" is OFF.
-- **PowerShell refuses to activate the venv** (red error about scripts) →
-  run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then
-  retry `.\venv\Scripts\activate`.
-
-See `docs/TESTING.md` for a step-by-step test plan (test the OLED alone,
-then the mic alone, then the server alone, then the full loop) — this is
-the fastest way to isolate a problem instead of debugging the whole chain
-at once.
+- ERROR face right after boot = it can't reach the server. Check SERVER_URL,
+  check uvicorn is running, check /health from a phone on the same wifi.
+- Powershell refuses to activate the venv: run once
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+- OLED blank from the start? Try address 0x3D instead of 0x3C in pins.h.
+- Serial or server log shows why something failed - that's what they're for.
+- Proper test order on hardware day: `docs/TESTING.md` - face first, then
+  wifi, then mic, then server, then the full loop. Set FACE_SELFTEST to 1 in
+  the sketch to watch all the face animations with nothing else wired.
