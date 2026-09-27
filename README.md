@@ -93,6 +93,18 @@ alert for certainty. Check `docs/API.md` for details.)
 
 ## Troubleshooting
 
+- **ESP32 shows the ERROR face right after boot and never recovers** →
+  check `SERVER_URL` IP in `config.h`, that the server is running, and that
+  the answer to `curl http://<server-ip>:8000/health` from a phone on the
+  same WiFi is `{"status":"ok"}`.
+- **ESP32 can't reach the server but /health works on the server laptop
+  itself** → Windows Firewall is blocking it: allow "Python" on Private
+  networks (the prompt appears at the first uvicorn run — click Allow), and
+  make sure the WiFi router's "AP isolation"/"client isolation" is OFF.
+- **PowerShell refuses to activate the venv** (red error about scripts) →
+  run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then
+  retry `.\venv\Scripts\activate`.
+
 See `docs/TESTING.md` for a step-by-step test plan (test the OLED alone,
 then the mic alone, then the server alone, then the full loop) — this is
 the fastest way to isolate a problem instead of debugging the whole chain
